@@ -39,7 +39,7 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(numChoices, partici
     while deltaCounts < deltaExitCriteria
         % generate participant preferences
         for i = 1:participants
-            prefs(i,:) = generate_prefs(i, numChoices);
+            prefs(i,:) = generate_prefs(i, participants, numChoices);
         end
 
         % Add up their votes
@@ -85,6 +85,7 @@ end
 
 %
 % Consensus
+% What fraction of choices received more than 'frac' percentage of people voting for it?
 %
 function [c] = consensus(choiceVotes, participants)
     frac = 0.5;
@@ -92,7 +93,8 @@ function [c] = consensus(choiceVotes, participants)
 end
 
 %
-% Dilution
+% Saturation
+% What fraction of choices received the maximum number of votes?
 %
 function [d] = saturation(choiceVotes, participants)
     frac = 1.0;
@@ -100,7 +102,8 @@ function [d] = saturation(choiceVotes, participants)
 end
 
 %
-% Spread
+% Rejected
+% What fractionm of choices received less than 'frac' percentage of people voting for it?
 %
 function [s] = rejected(choiceVotes, participants)
     frac = 0.1;
@@ -110,30 +113,60 @@ end
 %
 % Generate Participant Prefs
 %
-function [p] = generate_prefs(x, n)
-    type = 'random-4-groups';
+% p_idx = participant index
+%   p_n = number of participants
+%     n = number of choices to vote for
+function [p] = generate_prefs(p_idx, p_n, n)
+    type = 'random-groupings-single-faction';
     switch type
         case 'random'
             p = randperm(n);
         case 'linear'
             p = 1:n;
-        case 'random-4-groups'
-            p = random4g(n);
+        case 'random-groupings-single-faction'
+            p = randomGSF(n);
+        case 'random-groupings-multi-factions-no-overlap'
+            p = randomGMFNO(p_idx, p_n, n)
         otherwise
             error('Unsupported option for generate_prefs().');
     endswitch
 end
 
 %
-% Randomize preferences in 4 equal groups 1-25, 26-50, etc.
+% Randomize preferences in some number of groups, all participants assumed
+% to be in the same 'faction'.
 %
-function [p] = random4g(n)
+function [p] = randomGSF(n)
     boundary_values = [ 0 0.25 0.5 0.75 1.0 ];
 
     % Determine group boundary indices
     b = round(n * [boundary_values]);
     for i = 2:length(boundary_values)
         p(b(i-1)+1:b(i)) = randperm(b(i)-b(i-1)) + b(i-1);
+    endfor
+end
+
+%
+% Randomize preferences in some number of groups, participants divided into
+% some number of non-overlapping factions
+%
+function [p] = randomGMFNO(p_idx, p_n, n)
+    option_boundaries = [ 0 0.25 0.5 0.75 1.0 ];
+    faction_boundaries  = [ 0.25 0.5 0.75 1.0 ];
+    fp                  = [ 1 2 3 4;
+                            2 3 4 1;
+                            3 4 1 2;
+                            4 1 2 3];
+
+    b = round(n * option_boundaries);
+    f = round(p_n * faction_boundaries);
+
+    % Determine the faction
+    faction = sum(f < p_idx) + 1;
+
+    % Determine preference groupings for that faction
+    for i = 2:length(option_boundaries)
+        p(b(i-1)+1:b(i)) = randperm(b(i)-b(i-1)) + b(fp(faction,i-1));
     endfor
 end
 
