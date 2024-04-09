@@ -11,10 +11,10 @@ global SimParams = struct(
         "numChoices", 60,
 
         % participants is the number of participants being simulated
-        "participants", [40:1:41],
+        "participants", [40:1:50],
 
         % votesPP is how many votes each participant can cast
-        "votesPP", [3:1:4],
+        "votesPP", [3:1:15],
 
         % method describes how the participants distribute their votes
         % available methods:
