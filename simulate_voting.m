@@ -118,7 +118,7 @@ function [p] = generate_prefs(p_idx, p_n, p_v)
         case 'random-groupings-single-faction'
             p = randomGSF(SimParams.voting.numChoices);
         case 'random-groupings-multi-faction'
-            p = randomGMF(p_idx, p_n);
+            p = randomGMF(p_idx, p_n, p_v);
         case 'random-MV'
             p = randomMV(SimParams.voting.numChoices);
         otherwise
@@ -146,23 +146,46 @@ end
 % Randomize preferences in some number of groups, participants divided into
 % some number of non-overlapping factions
 %
-function [p] = randomGMF(p_idx, p_n, n)
+function [p] = randomGMF(p_idx, p_n, p_v)
     global SimParams;
 
     option_boundaries = [ 0 SimParams.choice_groups.boundaries];
     faction_boundaries = SimParams.factions.boundaries;
     fp = SimParams.factions.preferences;
 
-    b = round(n * option_boundaries);
+    b = round(SimParams.voting.numChoices * option_boundaries);
     f = round(p_n * faction_boundaries);
 
-    % Determine the faction
+    % Determine the faction for this voter
     faction = sum(f < p_idx) + 1;
 
+    numGroups = length(SimParams.choice_groups.boundaries);
+    numGroupsToVote = length(SimParams.factions.vote_distribution);
+    votesPerGroup = [round(SimParams.factions.vote_distribution * p_v) zeros(1,numGroups-numGroupsToVote)];
+
+    while sum(votesPerGroup) < p_v
+        % If not enough votes allocated, add to favorite group
+        votesPerGroup(1) = votesPerGroup(1) + 1;
+    endwhile
+    while sum(votesPerGroup) > p_v
+        % If too many votes allocated, take away from least favorite group that has
+        % at least one vote
+        for i = numGroupsToVote:-1:1
+            if votesPerGroup(i) > 0
+                votesPerGroup(i) = votesPerGroup(i) - 1;
+                break
+            endif
+        endfor
+    endwhile
+
     % Determine preference groupings for that faction
+    p = zeros(1,SimParams.voting.numChoices);
+    votesTaken = 0;
     for i = 2:length(option_boundaries)
-        p(b(i-1)+1:b(i)) = randperm(b(i)-b(i-1)) + b(fp(faction,i-1));
+        p(votesTaken+1:votesTaken+votesPerGroup(i-1)) = randperm(b(i)-b(i-1),votesPerGroup(i-1)) + b(fp(faction,i-1));
+        votesTaken = votesTaken + votesPerGroup(i-1);
     endfor
+
 end
 
 %

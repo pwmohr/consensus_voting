@@ -1,191 +1,110 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PARAMETERS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-epsilon = 0.001;
-numChoices = 20;
-participants = [4:2:20];
-votesPP = [3:1:10];
-deltaExitCriteria = 10;
+clear all;
+global SimParams = struct(
+    "voting",
+    struct(
+        % numChoices is the number of individual items that are available to vote upon
+        "numChoices", 100,
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% FUNCTION DEFINITIONS
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % participants is the number of participants being simulated
+        "participants", [5:5:50],
 
-%
-% Voting simulation function
-%
-% Parameters:
-%        numChoices: The number of individual items under consideration that can be voted for
-%      participants: The number of people who are voting on the choices
-%           votesPP: The number of votes allowed per participant
-%           epsilon: The change in averages of consensus and dilution that must be achieved for loop exit
-% deltaExitCriteria: The number of times in a row that change must be less than epsilon for loop exit
-%
-% Returns:
-%          cons_avg: Average computed consensus (0,1)
-%          dilu_avg: Average computed dilution (0,1)
-%                 n: Number of iterations required to achieve exit condition
-%
-function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(numChoices, participants, votesPP, epsilon, deltaExitCriteria)
-    n = 0;
-    cons_avg = 0;
-    satu_avg = 0;
-    reje_avg = 0;
-    deltaCounts = 0;
-    prefs = zeros(participants, numChoices);
-    choiceVotes = zeros(1,numChoices);
-    sw='\\\\\\\\||||||||////////--------';
+        % votesPP is how many votes each participant can cast
+        "votesPP", [5:10:50],
 
-    while deltaCounts < deltaExitCriteria
-        % generate participant preferences
-        for i = 1:participants
-            prefs(i,:) = generate_prefs(i, participants, numChoices);
-        end
+        % method describes how the participants distribute their votes
+        % available methods:
+        %
+        % 'linear':
+        %       All participants agree that 1 is best and that 'numChoices' is worst.
+        %
+        % 'random':
+        %       Participants randomly allocate votes. Only 1 vote allowed per item - no vote stacking
+        %
+        % 'random-groupings-single-faction':
+        %       The items to be voted upon are grouped (according to 'choice_groups.boundaries', below).
+        %       All agree that the first group is best, next is 2nd best, etc. But within each group
+        %       participants vote randomly.
+        %
+        % 'random-groupings-multi-faction':
+        %       Like 'random-groupings-single-faction', but users are divided into factions (according
+        %       to 'factions.boundaries', below), which in general do not agree on the ordering of
+        %       group preferences from favorite to least favorite.
+        %
+        % 'random-MV'
+        %       Like 'random', but allows users to stack votes.
+        "method", 'random-groupings-multi-faction'
+    ),
+    "csr_criteria",
+    struct(
+        % Fractions for determining consensus, saturation, and rejection values
+        "consensus_fraction", 0.5,
+        "saturation_fraction", 1.0,
+        "rejection_fraction", 0.1
+    ),
+    "choice_groups",
+    struct(
+        % boundaries specifies the distribution of how items being voted on are divided into
+        % different preference groups
+        % e.g., [0.25 0.5 0.75 1.0] defines the dividing lines to be every 25% of the total number
+        % of items, so if there were 100 items, group 1 would contain 1-25, group 2 would have 26-50, etc.
+        % the number of boundaries and their values can be changed, so for example if you wanted 3 groups
+        % where the first one is 10% of the total, the next one is 75% and the last one is 15%, you could
+        % use [0.1 0.85 1.0]
+        "boundaries", [0.25 0.5 0.75 1.0]
+    ),
+    "factions",
+    struct(
+        % boundaries specifies the distribution of people into the various factions. The dividing lines
+        % operate similarly to group boundaries, above. As with group boundaries, factions do not need to be
+        % the same size as one another, and they can be added and taken away by the manner in which 'boundaries'
+        % is edited.
+        "boundaries", [0.25 0.5 0.75 1.0],
 
-        % Add up their votes
-        choiceVotes = zeros(1,numChoices);
-        for i = 1:participants
-            for j = 1:votesPP
-              choiceVotes(prefs(i,j)) = choiceVotes(prefs(i,j)) + 1;
-            end
-        end
+        % preferences determines the order of preference that each faction has for each choice group.
+        % the rows represent factions 1-N, and the columns represent the order of preference for that faction,
+        % with the 1st column being the favorite, and the last column the least favogrite.
+        %
+        % NOTE that it is important that the preferences array match the dimensions implied by the number of choice
+        % groups (columns), and the number of factions (rows).
+        "preferences", [1 2 3 4;
+                        4 1 2 3;
+                        3 4 1 2;
+                        2 3 4 1],
 
-        % Compute consensus, dilution, rejected
-        cons = consensus(choiceVotes, participants);
-        satu = saturation(choiceVotes, participants);
-        reje = rejected(choiceVotes, participants);
-
-        % Calculate weighted averages
-        cons_avg_new = (cons_avg * n + cons) / (n + 1);
-        satu_avg_new = (satu_avg * n + satu) / (n + 1);
-        reje_avg_new = (reje_avg * n + reje) / (n + 1);
-
-        delta_cons = abs(cons_avg - cons_avg_new);
-        delta_satu = abs(satu_avg - satu_avg_new);
-
-        delta = max( delta_cons, delta_satu );
-
-        if delta < epsilon
-            deltaCounts = deltaCounts + 1;
-        else
-            deltaCounts = 0;
-        end
-
-        cons_avg = cons_avg_new;
-        satu_avg = satu_avg_new;
-        reje_avg = reje_avg_new;
-
-        % increment the loop counter
-        n = n + 1;
-
-        % print progress widget
-        fprintf('\b%c', sw(mod(n,length(sw))+1));
-    end
-end
-
-%
-% Consensus
-% What fraction of choices received more than 'frac' percentage of people voting for it?
-%
-function [c] = consensus(choiceVotes, participants)
-    frac = 0.5;
-    c = sum(choiceVotes >= frac * participants) / length(choiceVotes);
-end
-
-%
-% Saturation
-% What fraction of choices received the maximum number of votes?
-%
-function [d] = saturation(choiceVotes, participants)
-    frac = 1.0;
-    d = sum(choiceVotes >= frac * participants) / length(choiceVotes);
-end
-
-%
-% Rejected
-% What fractionm of choices received less than 'frac' percentage of people voting for it?
-%
-function [s] = rejected(choiceVotes, participants)
-    frac = 0.1;
-    s = sum(choiceVotes <= frac * participants) / length(choiceVotes);
-end
-
-%
-% Generate Participant Prefs
-%
-% p_idx = participant index
-%   p_n = number of participants
-%     n = number of choices to vote for
-function [p] = generate_prefs(p_idx, p_n, n)
-    type = 'random-groupings-single-faction';
-    switch type
-        case 'random'
-            p = randperm(n);
-        case 'linear'
-            p = 1:n;
-        case 'random-groupings-single-faction'
-            p = randomGSF(n);
-        case 'random-groupings-multi-factions-no-overlap'
-            p = randomGMFNO(p_idx, p_n, n)
-        otherwise
-            error('Unsupported option for generate_prefs().');
-    endswitch
-end
-
-%
-% Randomize preferences in some number of groups, all participants assumed
-% to be in the same 'faction'.
-%
-function [p] = randomGSF(n)
-    boundary_values = [ 0 0.25 0.5 0.75 1.0 ];
-
-    % Determine group boundary indices
-    b = round(n * [boundary_values]);
-    for i = 2:length(boundary_values)
-        p(b(i-1)+1:b(i)) = randperm(b(i)-b(i-1)) + b(i-1);
-    endfor
-end
-
-%
-% Randomize preferences in some number of groups, participants divided into
-% some number of non-overlapping factions
-%
-function [p] = randomGMFNO(p_idx, p_n, n)
-    option_boundaries = [ 0 0.25 0.5 0.75 1.0 ];
-    faction_boundaries  = [ 0.25 0.5 0.75 1.0 ];
-    fp                  = [ 1 2 3 4;
-                            2 3 4 1;
-                            3 4 1 2;
-                            4 1 2 3];
-
-    b = round(n * option_boundaries);
-    f = round(p_n * faction_boundaries);
-
-    % Determine the faction
-    faction = sum(f < p_idx) + 1;
-
-    % Determine preference groupings for that faction
-    for i = 2:length(option_boundaries)
-        p(b(i-1)+1:b(i)) = randperm(b(i)-b(i-1)) + b(fp(faction,i-1));
-    endfor
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% START OF SCRIPT
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % vote_distribution represents what fraction of total available votes a participant will cast in each
+        % of their descending list of preferences. For example, [ 0.5 0.35 0.15 ] would mean that a voter
+        % would allocate 50% of their votes to their favorite choice group, 35% of their votes to their 2nd favorite
+        % group, and 15% of their votes to their 3rd favorite group.
+        %
+        % The sum of the columns should be 1.0
+        "vote_distribution", [ 0.5 0.35 0.15 ]
+    ),
+    "precision",
+    struct(
+        % epsilon and deltaExitCriteria define the conditions under which
+        % the simulation ends. When the 'consensus' average value has
+        % changed less than 'epsilon' for at least 'deltaExitCriteria' passes,
+        % the simulation is complete
+        "epsilon", 0.001,
+        "deltaExitCriteria", 10
+    )
+);
 
 %
 % Allocate Memory
 %
-c = s = r = n = zeros(length(participants), length(votesPP));
+c = s = r = n = zeros(length(SimParams.voting.participants), length(SimParams.voting.votesPP));
 
 %
-% Run the simulations
+% Run the simulations for each # of participants and # of votes per participant
 %
-for i = 1:length(participants)
-  for j = 1:length(votesPP)
-    fprintf('Simulating %2d participants %2d votes: ', participants(i), votesPP(j));
-    [c(i,j), s(i,j), r(i,j), n(i,j)] = simulate_voting( numChoices, participants(i), votesPP(j), epsilon, deltaExitCriteria);
+for i = 1:length(SimParams.voting.participants)
+  for j = 1:length(SimParams.voting.votesPP)
+    fprintf('Simulating %2d participants %2d votes: ', SimParams.voting.participants(i), SimParams.voting.votesPP(j));
+    [c(i,j), s(i,j), r(i,j), n(i,j)] = simulate_voting(SimParams.voting.participants(i), SimParams.voting.votesPP(j));
     fprintf('\b  [c = %f, s = %e, r = %f, n = %d]\n', c(i,j), s(i,j), r(i,j), n(i,j));
   end
 end
@@ -193,26 +112,41 @@ end
 %
 % Plot Results
 %
-figure;
-[x,y] = meshgrid(participants, votesPP);
+ss = get(0, 'screensize');
+width = ceil(0.8 * ss(3));
+height = ceil(0.25 * width);
+x = 0.5 * (ss(3) - width);
+y = 0.5 * (ss(4) - height);
+figure("Position", [x y width height]);
+subplot(1,4,1);
+axis off;
+str = disp(SimParams);
+underscores = strfind(str,'_');
+str(underscores) = ' ';
+text(0,0.5,str);
+
+subplot(1,4,2);
+[x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
 mesh(x, y, c');
-title("Consensus", "FontSize", 20);
+title(strcat("Consensus"," ( c >= ", sprintf("%4.2f ",SimParams.csr_criteria.consensus_fraction),")"), "FontSize", 16);
 xlabel("# of Participants", "FontSize", 14);
 ylabel("# of Votes per Participant", "FontSize", 14);
 zlabel("Fraction", "FontSize", 14);
 
-figure;
-[x,y] = meshgrid(participants, votesPP);
-mesh(x, y, s');
-title("Saturated", "FontSize", 20);
-xlabel("# of Participants", "FontSize", 14);
-ylabel("# of Votes per Participant", "FontSize", 14);
-zlabel("Fraction", "FontSize", 14);
-
-figure;
-[x,y] = meshgrid(participants, votesPP);
+subplot(1,4,3);
+[x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
 mesh(x, y, r');
-title("Rejected", "FontSize", 20);
+title(strcat("Rejected"," ( r <= ", sprintf("%4.2f ",SimParams.csr_criteria.rejection_fraction),")"), "FontSize", 16);
 xlabel("# of Participants", "FontSize", 14);
 ylabel("# of Votes per Participant", "FontSize", 14);
 zlabel("Fraction", "FontSize", 14);
+
+subplot(1,4,4);
+[x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
+mesh(x, y, s');
+title(strcat("Saturated"," ( s >= ", sprintf("%4.2f ",SimParams.csr_criteria.saturation_fraction),")"), "FontSize", 16);
+xlabel("# of Participants", "FontSize", 14);
+ylabel("# of Votes per Participant", "FontSize", 14);
+zlabel("Fraction", "FontSize", 14);
+
+
