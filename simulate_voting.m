@@ -20,8 +20,9 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(p_n, p_v)
     deltaCounts = 0;
     prefs = zeros(p_n, SimParams.voting.numChoices);
     choiceVotes = zeros(1,SimParams.voting.numChoices);
-    sw='\\\\\\\\\\\\\\\\||||||||||||||||////////////////----------------';
+    sw='\\\\\\\\\\\|||||||||||///////////-----------';
 
+    % Rejection Labeling
     while deltaCounts < SimParams.precision.deltaExitCriteria
         % generate participant preferences
         for i = 1:p_n
@@ -32,7 +33,9 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(p_n, p_v)
         choiceVotes = zeros(1,SimParams.voting.numChoices);
         for i = 1:p_n
             for j = 1:p_v
-              choiceVotes(prefs(i,j)) = choiceVotes(prefs(i,j)) + 1;
+              if prefs(i,j) != 0
+                    choiceVotes(prefs(i,j)) = choiceVotes(prefs(i,j)) + 1;
+              end
             end
         end
 
@@ -53,6 +56,30 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(p_n, p_v)
 
         if delta < SimParams.precision.epsilon
             deltaCounts = deltaCounts + 1;
+
+            if SimParams.debug.display_vote_monitor == true
+                bar( choiceVotes );
+                textVertOffset = 0.5;
+                axis([0 SimParams.voting.numChoices 0 max(SimParams.voting.participants)]);
+                line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.rejection_fraction*p_n, 'color', 'red');
+                text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.rejection_fraction*p_n+textVertOffset, 'Rejection', ...
+                     'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
+
+                % Consensus Labeling
+                line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.consensus_fraction*p_n, 'color', 'green');
+                text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.consensus_fraction*p_n+textVertOffset, 'Consensus', ...
+                     'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
+
+                % Saturation Labeling
+                line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.saturation_fraction*p_n, 'color', 'blue');
+                text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.saturation_fraction*p_n+textVertOffset, 'Saturation',
+                     'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
+
+                xlabel('Choices');
+                ylabel('Total Votes');
+                title(sprintf('Voting Bar Graph, %d Participants, %d Votes Each', p_n, p_v));
+                drawnow;
+            endif
         else
             deltaCounts = 0;
         end
@@ -65,7 +92,7 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(p_n, p_v)
         n = n + 1;
 
         % print progress widget
-        fprintf('\b%c', sw(mod(n,length(sw))+1));
+        % fprintf('\b%c', sw(mod(n,length(sw))+1));
     end
 end
 

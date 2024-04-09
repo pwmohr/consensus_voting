@@ -1,18 +1,20 @@
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PARAMETERS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-clear all;
+clear global;
+
 global SimParams = struct(
     "voting",
     struct(
         % numChoices is the number of individual items that are available to vote upon
-        "numChoices", 100,
+        "numChoices", 60,
 
         % participants is the number of participants being simulated
-        "participants", [5:5:50],
+        "participants", [40:1:41],
 
         % votesPP is how many votes each participant can cast
-        "votesPP", [5:10:50],
+        "votesPP", [3:1:4],
 
         % method describes how the participants distribute their votes
         % available methods:
@@ -40,7 +42,7 @@ global SimParams = struct(
     "csr_criteria",
     struct(
         % Fractions for determining consensus, saturation, and rejection values
-        "consensus_fraction", 0.5,
+        "consensus_fraction", 0.8,
         "saturation_fraction", 1.0,
         "rejection_fraction", 0.1
     ),
@@ -53,7 +55,7 @@ global SimParams = struct(
         % the number of boundaries and their values can be changed, so for example if you wanted 3 groups
         % where the first one is 10% of the total, the next one is 75% and the last one is 15%, you could
         % use [0.1 0.85 1.0]
-        "boundaries", [0.25 0.5 0.75 1.0]
+        "boundaries", [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
     ),
     "factions",
     struct(
@@ -69,10 +71,10 @@ global SimParams = struct(
         %
         % NOTE that it is important that the preferences array match the dimensions implied by the number of choice
         % groups (columns), and the number of factions (rows).
-        "preferences", [1 2 3 4;
-                        1 2 3 4;
-                        1 2 3 4;
-                        1 2 3 4],
+        "preferences", [1 2 3 4 5 6 7 8 9 10;
+                        4 1 2 3 6 5 8 7 9 10;
+                        3 4 1 2 5 6 7 8 9 10;
+                        2 3 4 1 6 5 8 7 9 10],
 
         % vote_distribution represents what fraction of total available votes a participant will cast in each
         % of their descending list of preferences. For example, [ 0.5 0.35 0.15 ] would mean that a voter
@@ -80,7 +82,7 @@ global SimParams = struct(
         % group, and 15% of their votes to their 3rd favorite group.
         %
         % The sum of the columns should be 1.0
-        "vote_distribution", [ 0.5 0.35 0.15 ]
+        "vote_distribution", [ 0.3 0.25 0.2 0.15 0.1 ]
     ),
     "precision",
     struct(
@@ -90,6 +92,12 @@ global SimParams = struct(
         % the simulation is complete
         "epsilon", 0.001,
         "deltaExitCriteria", 10
+    ),
+    "debug",
+    struct(
+        % set display_vote_monitor to true to show a bar graph of voting results during the simulation,
+        % set display_vote_monitor to false to turn it off
+        "display_vote_monitor", true
     )
 );
 
@@ -97,6 +105,18 @@ global SimParams = struct(
 % Allocate Memory
 %
 c = s = r = n = zeros(length(SimParams.voting.participants), length(SimParams.voting.votesPP));
+
+%
+% Set up bar monitor plot window
+%
+if SimParams.debug.display_vote_monitor == true
+    ss = get(0, 'screensize');
+    width = ceil(0.4 * ss(3));
+    height = ceil(0.67 * width);
+    x = ceil(0.55 * ss(3));
+    y = ceil(0.25 * ss(4));
+    figure('Position', [x y width height]);
+endif
 
 %
 % Run the simulations for each # of participants and # of votes per participant
@@ -112,7 +132,6 @@ end
 %
 % Plot Results
 %
-ss = get(0, 'screensize');
 width = ceil(0.8 * ss(3));
 height = ceil(0.25 * width);
 x = 0.5 * (ss(3) - width);
