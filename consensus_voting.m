@@ -70,9 +70,9 @@ global SimParams = struct(
         % NOTE that it is important that the preferences array match the dimensions implied by the number of choice
         % groups (columns), and the number of factions (rows).
         "preferences", [1 2 3 4;
-                        4 1 2 3;
-                        3 4 1 2;
-                        2 3 4 1],
+                        1 2 3 4;
+                        1 2 3 4;
+                        1 2 3 4],
 
         % vote_distribution represents what fraction of total available votes a participant will cast in each
         % of their descending list of preferences. For example, [ 0.5 0.35 0.15 ] would mean that a voter
