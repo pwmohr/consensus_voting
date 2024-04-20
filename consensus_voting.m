@@ -11,10 +11,10 @@ global SimParams = struct(
         "numChoices", 60,
 
         % participants is the number of participants being simulated
-        "participants", [40:1:50],
+        "participants", [20:5:30],
 
         % votesPP is how many votes each participant can cast
-        "votesPP", [3:1:15],
+        "votesPP", [30:5:40],
 
         % method describes how the participants distribute their votes
         % available methods:
@@ -37,14 +37,36 @@ global SimParams = struct(
         %
         % 'random-MV'
         %       Like 'random', but allows users to stack votes.
-        "method", 'random-groupings-multi-faction'
+        %
+        "method", 'random-groupings-multi-faction',
+
+        % exit-criteria describes what causes the voting routine to exit and return the results
+        %
+        % 'epsilon-deltaExitCriteria':
+        %       Looks at how much the average consensus number changes with each
+        %       iteration and once it is below epsilon for deltaExitCriteria cycles, it exits.
+        %
+        % 'add-votes-until-threshold':
+        %       Ignores epsilon / deltaExitCriteria, and instead exits once consensus is first achieved,
+        %       and reports number of votes required to achieve first consensus.
+        "exit_criteria", 'epsilon-deltaExitCriteria'
     ),
     "csr_criteria",
     struct(
-        % Fractions for determining consensus, saturation, and rejection values
-        "consensus_fraction", 0.8,
+        % Fractions for determining consensus, saturation, and rejection values - used in the 'epsilon-deltaExitCriteria' exit criteria,
+        % ignored in 'add-votes-until-threshold'
+        "consensus_fraction", 10/60,
         "saturation_fraction", 1.0,
-        "rejection_fraction", 0.1
+        "rejection_fraction", 0.1,
+
+        % Min votes required to consider one of the choices 'selected'. It should be a number from 0 to 1 and is a fraction of the number
+        % of voting participants. This is used in the 'add-votes-until-threshold' exit criteria and is ignored in the 'epsilon-deltaExitCriteria'
+        % exit criteria.
+        "votes-required-for-selection", 0.5,
+
+        % Min choices selected for exit. This is the number of choices that must be selected (according to 'votes-required-for-selection')
+        % in order to exit the voting. It is a fraction of the number of choices, so should be a number from 0 to 1.
+        "choices-selected-for-exit", 0.1
     ),
     "choice_groups",
     struct(
@@ -76,7 +98,7 @@ global SimParams = struct(
                         3 4 1 2 5 6 7 8 9 10;
                         2 3 4 1 6 5 8 7 9 10],
 
-        % vote_distribution represents what fraction of total available votes a participant will cast in each
+        % vote_distribution represents what fraction of total available votes a participant wants to cast in each
         % of their descending list of preferences. For example, [ 0.5 0.35 0.15 ] would mean that a voter
         % would allocate 50% of their votes to their favorite choice group, 35% of their votes to their 2nd favorite
         % group, and 15% of their votes to their 3rd favorite group.
@@ -97,7 +119,10 @@ global SimParams = struct(
     struct(
         % set display_vote_monitor to true to show a bar graph of voting results during the simulation,
         % set display_vote_monitor to false to turn it off
-        "display_vote_monitor", true
+        %
+        % The display will be updated according to "display_update_frequency", 1 = every time, n = every nth pass.
+        "display_vote_monitor", true,
+        "display_update_frequency", 5
     )
 );
 

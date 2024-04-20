@@ -169,6 +169,9 @@ end
 % Randomize preferences in some number of groups, participants divided into
 % some number of non-overlapping factions
 %
+% p_idx = index for this participant
+% p_n   = number of participants
+% p_v   = number of votes per participant
 function [p] = randomGMF(p_idx, p_n, p_v)
     global SimParams;
 
@@ -182,10 +185,13 @@ function [p] = randomGMF(p_idx, p_n, p_v)
     % Determine the faction for this voter
     faction = sum(f < p_idx) + 1;
 
+    % Determine how many votes this participant will allocate across each group
     numGroups = length(SimParams.choice_groups.boundaries);
     numGroupsToVote = length(SimParams.factions.vote_distribution);
     votesPerGroup = [round(SimParams.factions.vote_distribution * p_v) zeros(1,numGroups-numGroupsToVote)];
 
+    % Due to rounding, sometimes the above few statements can cause a voter to cast more votes than allowed
+    % or fewer votes than permitted. The code below corrects this.
     while sum(votesPerGroup) < p_v
         % If not enough votes allocated, add to favorite group
         votesPerGroup(1) = votesPerGroup(1) + 1;
@@ -200,6 +206,26 @@ function [p] = randomGMF(p_idx, p_n, p_v)
             endif
         endfor
     endwhile
+
+    % Depending on how many groups there are, it may be the case that more votes are allocated to a group%
+    % than the number of choices available in that group. Unless stacking votes is permitted, this isn't okay,
+    % so this code fixes that by going through preferences and reallocating votes in that manner.
+
+    % First collect the excessVotes
+    excessVotes = 0;
+    for i = 2:length(option_boundaries)
+        excessVotes = excessVotes + max(votesPerGroup(i-1) - (b(i)-b(i-1)),0);
+        votesPerGroup(i-1) = votesPerGroup(i-1) - max(votesPerGroup(i-1) - (b(i)-b(i-1)),0);
+    endfor
+
+    % Then redistribute them in order of preferences
+    for i = 2:length(option_boundaries)
+        % Add votes, in order of group preference until they're full or we run out of excessVotes
+        while votesPerGroup(fp(faction,i-1)) < (b(i)-b(i-1)) && excessVotes > 0
+            votesPerGroup(fp(faction,i-1)) = votesPerGroup(fp(faction,i-1)) + 1;
+            excessVotes = excessVotes - 1;
+        endwhile
+    endfor
 
     % Determine preference groupings for that faction
     p = zeros(1,SimParams.voting.numChoices);
