@@ -8,13 +8,13 @@ global SimParams = struct(
     "voting",
     struct(
         % numChoices is the number of individual items that are available to vote upon
-        "numChoices", 60,
+        "numChoices", 100,
 
         % participants is the number of participants being simulated
-        "participants", [20:5:30],
+        "participants", [30],
 
         % votesPP is how many votes each participant can cast
-        "votesPP", [30:5:40],
+        "votesPP", [1:30],
 
         % method describes how the participants distribute their votes
         % available methods:
@@ -49,24 +49,24 @@ global SimParams = struct(
         % 'add-votes-until-threshold':
         %       Ignores epsilon / deltaExitCriteria, and instead exits once consensus is first achieved,
         %       and reports number of votes required to achieve first consensus.
-        "exit_criteria", 'epsilon-deltaExitCriteria'
-    ),
+        "exit_criteria", 'add-votes-until-threshold',
+
+        % Min votes required to consider one of the choices 'selected'. It should be a number from 0 to 1 and is a fraction of the number
+        % of voting participants. This is used in the 'add-votes-until-threshold' exit criteria and is ignored in the 'epsilon-deltaExitCriteria'
+        % exit criteria.
+        "votes_required_for_selection", 0.5,
+
+        % Min choices selected to exit. This is the number of choices that must be selected (according to 'votes-required-for-selection')
+        % in order to exit the voting. It is a fraction of the number of choices, so should be a number from 0 to 1.
+        "choices_selected_to_exit", 0.1
+   ),
     "csr_criteria",
     struct(
         % Fractions for determining consensus, saturation, and rejection values - used in the 'epsilon-deltaExitCriteria' exit criteria,
         % ignored in 'add-votes-until-threshold'
         "consensus_fraction", 10/60,
         "saturation_fraction", 1.0,
-        "rejection_fraction", 0.1,
-
-        % Min votes required to consider one of the choices 'selected'. It should be a number from 0 to 1 and is a fraction of the number
-        % of voting participants. This is used in the 'add-votes-until-threshold' exit criteria and is ignored in the 'epsilon-deltaExitCriteria'
-        % exit criteria.
-        "votes-required-for-selection", 0.5,
-
-        % Min choices selected for exit. This is the number of choices that must be selected (according to 'votes-required-for-selection')
-        % in order to exit the voting. It is a fraction of the number of choices, so should be a number from 0 to 1.
-        "choices-selected-for-exit", 0.1
+        "rejection_fraction", 0.1
     ),
     "choice_groups",
     struct(
@@ -144,53 +144,64 @@ if SimParams.debug.display_vote_monitor == true
 endif
 
 %
+% Consensus-Saturation method
 % Run the simulations for each # of participants and # of votes per participant
 %
-for i = 1:length(SimParams.voting.participants)
-  for j = 1:length(SimParams.voting.votesPP)
-    fprintf('Simulating %2d participants %2d votes: ', SimParams.voting.participants(i), SimParams.voting.votesPP(j));
-    [c(i,j), s(i,j), r(i,j), n(i,j)] = simulate_voting(SimParams.voting.participants(i), SimParams.voting.votesPP(j));
-    fprintf('\b  [c = %f, s = %e, r = %f, n = %d]\n', c(i,j), s(i,j), r(i,j), n(i,j));
-  end
-end
+if isequal( SimParams.voting.exit_criteria, 'epsilon-deltaExitCriteria' )
+    for i = 1:length(SimParams.voting.participants)
+      for j = 1:length(SimParams.voting.votesPP)
+        fprintf('Simulating %2d participants %2d votes: ', SimParams.voting.participants(i), SimParams.voting.votesPP(j));
+        [c(i,j), s(i,j), r(i,j), n(i,j)] = simulate_voting(SimParams.voting.participants(i), SimParams.voting.votesPP(j));
+        fprintf('\b  [c = %f, s = %e, r = %f, n = %d]\n', c(i,j), s(i,j), r(i,j), n(i,j));
+      end
+    end
 
-%
-% Plot Results
-%
-width = ceil(0.8 * ss(3));
-height = ceil(0.25 * width);
-x = 0.5 * (ss(3) - width);
-y = 0.5 * (ss(4) - height);
-figure("Position", [x y width height]);
-subplot(1,4,1);
-axis off;
-str = disp(SimParams);
-underscores = strfind(str,'_');
-str(underscores) = ' ';
-text(0,0.5,str);
+    %
+    % Plot Results
+    %
+    width = ceil(0.8 * ss(3));
+    height = ceil(0.25 * width);
+    x = 0.5 * (ss(3) - width);
+    y = 0.5 * (ss(4) - height);
+    figure("Position", [x y width height]);
+    subplot(1,4,1);
+    axis off;
+    str = disp(SimParams);
+    underscores = strfind(str,'_');
+    str(underscores) = ' ';
+    text(0,0.5,str);
 
-subplot(1,4,2);
-[x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
-mesh(x, y, c');
-title(strcat("Consensus"," ( c >= ", sprintf("%4.2f ",SimParams.csr_criteria.consensus_fraction)," )"), "FontSize", 16);
-xlabel("# of Participants", "FontSize", 14);
-ylabel("# of Votes per Participant", "FontSize", 14);
-zlabel("Fraction", "FontSize", 14);
+    subplot(1,4,2);
+    [x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
+    mesh(x, y, c');
+    title(strcat("Consensus"," ( c >= ", sprintf("%4.2f ",SimParams.csr_criteria.consensus_fraction)," )"), "FontSize", 16);
+    xlabel("# of Participants", "FontSize", 14);
+    ylabel("# of Votes per Participant", "FontSize", 14);
+    zlabel("Fraction", "FontSize", 14);
 
-subplot(1,4,3);
-[x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
-mesh(x, y, r');
-title(strcat("Rejected"," ( r <= ", sprintf("%4.2f ",SimParams.csr_criteria.rejection_fraction)," )"), "FontSize", 16);
-xlabel("# of Participants", "FontSize", 14);
-ylabel("# of Votes per Participant", "FontSize", 14);
-zlabel("Fraction", "FontSize", 14);
+    subplot(1,4,3);
+    [x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
+    mesh(x, y, r');
+    title(strcat("Rejected"," ( r <= ", sprintf("%4.2f ",SimParams.csr_criteria.rejection_fraction)," )"), "FontSize", 16);
+    xlabel("# of Participants", "FontSize", 14);
+    ylabel("# of Votes per Participant", "FontSize", 14);
+    zlabel("Fraction", "FontSize", 14);
 
-subplot(1,4,4);
-[x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
-mesh(x, y, s');
-title(strcat("Saturated"," ( s >= ", sprintf("%4.2f ",SimParams.csr_criteria.saturation_fraction)," )"), "FontSize", 16);
-xlabel("# of Participants", "FontSize", 14);
-ylabel("# of Votes per Participant", "FontSize", 14);
-zlabel("Fraction", "FontSize", 14);
-
+    subplot(1,4,4);
+    [x,y] = meshgrid(SimParams.voting.participants, SimParams.voting.votesPP);
+    mesh(x, y, s');
+    title(strcat("Saturated"," ( s >= ", sprintf("%4.2f ",SimParams.csr_criteria.saturation_fraction)," )"), "FontSize", 16);
+    xlabel("# of Participants", "FontSize", 14);
+    ylabel("# of Votes per Participant", "FontSize", 14);
+    zlabel("Fraction", "FontSize", 14);
+else
+    for i = 1:length(SimParams.voting.participants)
+        [c,s,r,n(i)] = simulate_voting(SimParams.voting.participants(i), 0);
+        if n(i) > 0
+            fprintf("For %d participants, exit condition achieved at %d votes per participant.\n", SimParams.voting.participants(i), n(i));
+        else
+            fprintf("For %d participants, no exit with up to %d votes.\n", SimParams.voting.participants(i), max(SimParams.voting.votesPP));
+        end
+    end
+endif
 

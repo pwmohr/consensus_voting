@@ -12,6 +12,78 @@
 %                 n: Number of iterations required to achieve exit condition
 %
 function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(p_n, p_v)
+    global SimParams
+
+    % Choose which voting method to use
+    %
+    % *_csr is the consensus, saturation, and rejection method using the
+    %       epsilon / delta exit criteria
+    %
+    % *_avt is the add-votes-to-threshold method
+    if( isequal( SimParams.voting.exit_criteria, 'epsilon-deltaExitCriteria' ) )
+        [cons_avg, satu_avg, reje_avg, n] = simulate_voting_csr(p_n, p_v);
+    else
+        [cons_avg, satu_avg, reje_avg, n] = simulate_voting_avt(p_n, p_v);
+    endif
+end
+
+% Simulates voting in which participants are granted more votes until enough of
+% the choices are selected.
+%
+% To be considered 'selected', a choice must receive 'votes-required-for-selection',
+% and 'enough' are selected when the fraction of choices meets or exceeds 'choices-selected-for-exit'
+%
+function [cons_avg, satu_avg, reje_avg, n] = simulate_voting_avt(p_n, p_v)
+    global SimParams;
+    n = 0;
+    cons_avg = satu_avg = reje_avg = 0;
+
+    prefs = zeros(p_n, SimParams.voting.numChoices);
+    choiceVotes = zeros(1,SimParams.voting.numChoices);
+    votesReqdForSelection = SimParams.voting.votes_required_for_selection * p_n;
+    p_v = 0;
+
+    while sum( choiceVotes >= votesReqdForSelection ) < ( SimParams.voting.choices_selected_to_exit * SimParams.voting.numChoices )
+
+        % Determine number of votesPP
+        % if we are at the end of the votesPP specified,
+        % return n = -1 to indicate criteria not achieved
+        if n+1 <= length( SimParams.voting.votesPP )
+            p_v = SimParams.voting.votesPP(n+1);
+        else
+            n = -1;
+            return;
+        end
+
+        % generate voter preferences
+        for i = 1:p_n
+            prefs(i,:) = generate_prefs(i, p_n, p_v);
+        endfor
+
+        % Add up their votes
+        choiceVotes = zeros(1,SimParams.voting.numChoices);
+        for i = 1:p_n
+            for j = 1:p_v
+                if prefs(i,j) != 0
+                    choiceVotes(prefs(i,j)) = choiceVotes(prefs(i,j)) + 1;
+                end
+            endfor
+        endfor
+
+        if SimParams.debug.display_vote_monitor == true
+            display_vote_monitor( choiceVotes, p_n, p_v );
+        end
+        n = n + 1;
+    endwhile
+    n = p_v;
+end
+
+%
+% Simulates voting in which the exit criteria is based on epislon / delta
+% where voting ends when the average levels of consensus specified in SimParams
+% is no longer changing very much.
+%
+function [cons_avg, satu_avg, reje_avg, n] = simulate_voting_csr(p_n, p_v)
     global SimParams;
     n = 0;
     cons_avg = 0;
@@ -58,27 +130,7 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(p_n, p_v)
             deltaCounts = deltaCounts + 1;
 
             if SimParams.debug.display_vote_monitor == true
-                bar( choiceVotes );
-                textVertOffset = 0.5;
-                axis([0 SimParams.voting.numChoices 0 max(SimParams.voting.participants)]);
-                line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.rejection_fraction*p_n, 'color', 'red');
-                text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.rejection_fraction*p_n+textVertOffset, 'Rejection', ...
-                     'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
-
-                % Consensus Labeling
-                line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.consensus_fraction*p_n, 'color', 'green');
-                text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.consensus_fraction*p_n+textVertOffset, 'Consensus', ...
-                     'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
-
-                % Saturation Labeling
-                line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.saturation_fraction*p_n, 'color', 'blue');
-                text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.saturation_fraction*p_n+textVertOffset, 'Saturation',
-                     'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
-
-                xlabel('Choices');
-                ylabel('Total Votes');
-                title(sprintf('Voting Bar Graph, %d Participants, %d Votes Each', p_n, p_v));
-                drawnow;
+                display_vote_monitor( choiceVotes, p_n, p_v );
             endif
         else
             deltaCounts = 0;
@@ -94,6 +146,38 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting(p_n, p_v)
         % print progress widget
         % fprintf('\b%c', sw(mod(n,length(sw))+1));
     end
+end
+
+%
+% Bar Graph Vote Monitor
+%
+function [] = display_vote_monitor( choiceVotes, p_n, p_v )
+    global SimParams;
+
+    bar( choiceVotes );
+    textVertOffset = 0.5;
+    axis([0 SimParams.voting.numChoices 0 max(SimParams.voting.participants)]);
+
+    if isequal( SimParams.voting.exit_criteria, 'epsilon-deltaExitCriteria' )
+        line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.rejection_fraction*p_n, 'color', 'red');
+        text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.rejection_fraction*p_n+textVertOffset, 'Rejection', ...
+             'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
+
+        % Consensus Labeling
+        line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.consensus_fraction*p_n, 'color', 'green');
+        text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.consensus_fraction*p_n+textVertOffset, 'Consensus', ...
+             'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
+
+        % Saturation Labeling
+        line([0 SimParams.voting.numChoices], [1 1]*SimParams.csr_criteria.saturation_fraction*p_n, 'color', 'blue');
+        text(0.95*SimParams.voting.numChoices, SimParams.csr_criteria.saturation_fraction*p_n+textVertOffset, 'Saturation',
+             'fontsize', 12, 'color', 'black', 'horizontalAlignment', 'right');
+    end
+
+    xlabel('Choices');
+    ylabel('Total Votes');
+    title(sprintf('Voting Bar Graph, %d Participants, %d Votes Each', p_n, p_v));
+    drawnow;
 end
 
 %
