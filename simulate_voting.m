@@ -314,8 +314,6 @@ function [p] = randomGMFF(p_idx, p_n, p_v)
             extraVotes = extraVotes - 1;
         endwhile
     endfor
-
-
 end
 
 

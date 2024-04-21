@@ -10,8 +10,12 @@ global SimParams = struct(
         % numChoices is the number of individual items that are available to vote upon
         "numChoices", 100,
 
-        % participants is the number of participants being simulated
-        "participants", [30],
+        % participants is the number of participants being simulated. This can be an
+        % array to run the simulation multiple times.
+        % e.g., [30 30 30 30], or equivalently, [30]*ones(1,5), would run the simulation 5 times
+        % each time with 30 participants.
+        % e.g., [10:5:25] would run the simulation with 10, then 15, then 20, then 25 participants.
+        "participants", [30]*ones(1,5),
 
         % votesPP is how many votes each participant can cast
         "votesPP", [1:100],
@@ -54,11 +58,11 @@ global SimParams = struct(
         % Min votes required to consider one of the choices 'selected'. It should be a number from 0 to 1 and is a fraction of the number
         % of voting participants. This is used in the 'add-votes-until-threshold' exit criteria and is ignored in the 'epsilon-deltaExitCriteria'
         % exit criteria.
-        "votes_required_for_selection", 1,
+        "votes_required_for_selection", .75,
 
         % Min choices selected to exit. This is the number of choices that must be selected (according to 'votes-required-for-selection')
         % in order to exit the voting. It is a fraction of the number of choices, so should be a number from 0 to 1.
-        "choices_selected_to_exit", 1
+        "choices_selected_to_exit", .2
    ),
     "csr_criteria",
     struct(
@@ -85,18 +89,18 @@ global SimParams = struct(
         % operate similarly to group boundaries, above. As with group boundaries, factions do not need to be
         % the same size as one another, and they can be added and taken away by the manner in which 'boundaries'
         % is edited.
-        "boundaries", [1.0],
+        "boundaries", [.25 .5 .75 1.0],
 
         % preferences determines the order of preference that each faction has for each choice group.
         % the rows represent factions 1-N, and the columns represent the order of preference for that faction,
-        % with the 1st column being the favorite, and the last column the least favogrite.
+        % with the 1st column being the favorite, and the last column the least favorite.
         %
         % NOTE that it is important that the preferences array match the dimensions implied by the number of choice
         % groups (columns), and the number of factions (rows).
-        "preferences", [1 2 3 4 5 6 7 8 9 10;
-                        4 1 2 3 6 5 8 7 9 10;
-                        3 4 1 2 5 6 7 8 9 10;
-                        2 3 4 1 6 5 8 7 9 10],
+        "preferences", [1 2 3 4  5 6 7 8 9 10;
+                        4 1 2 3  6 5 8 7 9 10;
+                        7 8 9 10 3 4 1 2 5 6;
+                        8 7 9 10 2 3 4 1 6 5],
 
         % vote_distribution represents what fraction of each group of choices the participant wants to vote for
         % e.g., [ .75 .5 .25 .1 ] would mean the participant would want to place votes on 75% of their favorite
@@ -107,7 +111,7 @@ global SimParams = struct(
         %
         % If after they've hit those percentage targets, they have votes remaining, they will fill up the max number
         % of votes in their first preference choice group, then fill up the max number in their 2nd preferred choice group, etc.
-        "vote_distribution", linspace(1,0,10)
+        "vote_distribution", linspace(.8,0,10)
     ),
     "precision",
     struct(
@@ -206,5 +210,13 @@ else
             fprintf("For %d participants, no exit with up to %d votes.\n", SimParams.voting.participants(i), max(SimParams.voting.votesPP));
         end
     end
+
+    m = mean(n(:,1));
+    sd = std(n(:,1));
+
+    if m > 0 && length(SimParams.voting.participants) > 1
+        fprintf("Mean number of votes to match exit criteria: %f\n", m);
+        fprintf("Standard deviation: %f\n", sd);
+    endif
 endif
 
