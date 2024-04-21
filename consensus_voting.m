@@ -102,7 +102,8 @@ global SimParams = struct(
         % e.g., [ .75 .5 .25 .1 ] would mean the participant would want to place votes on 75% of their favorite
         % choice group, but then would move on to start voting on their second favorite choice group. Once 40%
         % of those choices had been voted for, the participant would move on to the 3rd group and so on until they
-        % are out of votes.
+        % are out of votes. These do not need to add up to anything (such as 1). They simply reflect how strongly
+        % a participant wants to max out their votes in each category.
         %
         % If after they've hit those percentage targets, they have votes remaining, they will fill up the max number
         % of votes in their first preference choice group, then fill up the max number in their 2nd preferred choice group, etc.
