@@ -38,10 +38,15 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting_avt(p_n, p_v)
     n = 0;
     cons_avg = satu_avg = reje_avg = 0;
 
-    prefs = zeros(p_n, SimParams.voting.numChoices);
+    prefs = zeros(p_n, p_v);
     choiceVotes = zeros(1,SimParams.voting.numChoices);
     votesReqdForSelection = SimParams.voting.votes_required_for_selection * p_n;
     p_v = 0;
+
+    % generate voter preferences
+    for i = 1:p_n
+        prefs(i,:) = generate_prefs(i, p_n, max(SimParams.voting.votesPP));
+    endfor
 
     while sum( choiceVotes >= votesReqdForSelection ) < ( SimParams.voting.choices_selected_to_exit * SimParams.voting.numChoices )
 
@@ -54,11 +59,6 @@ function [cons_avg, satu_avg, reje_avg, n] = simulate_voting_avt(p_n, p_v)
             n = -1;
             return;
         end
-
-        % generate voter preferences
-        for i = 1:p_n
-            prefs(i,:) = generate_prefs(i, p_n, p_v);
-        endfor
 
         % Add up their votes
         choiceVotes = zeros(1,SimParams.voting.numChoices);
@@ -225,7 +225,11 @@ function [p] = generate_prefs(p_idx, p_n, p_v)
         case 'random-groupings-single-faction'
             p = randomGSF(SimParams.voting.numChoices);
         case 'random-groupings-multi-faction'
-            p = randomGMF(p_idx, p_n, p_v);
+            if isequal(SimParams.voting.exit_criteria, 'add-votes-until-threshold')
+                p = randomGMFF(p_idx, p_n, p_v);
+            else
+                p = randomGMF(p_idx, p_n, p_v);
+            endif
         case 'random-MV'
             p = randomMV(SimParams.voting.numChoices);
         otherwise
@@ -239,6 +243,7 @@ end
 %
 function [p] = randomGSF(n)
     global SimParams;
+    error("Single factions are not currently supported");
 
     boundary_values = [0 SimParams.choice_groups.boundaries];
 
@@ -248,6 +253,71 @@ function [p] = randomGSF(n)
         p(b(i-1)+1:b(i)) = randperm(b(i)-b(i-1)) + b(i-1);
     endfor
 end
+
+%
+% Randomize preferences in some number of groups, participants divided into
+% some number of non-overlapping factions. Works the same as randomGMF() but
+% it front-loads preferences
+%
+% p_idx = index for this participant
+% p_n   = number of participants
+% p_v   = number of votes per participant
+function [p] = randomGMFF(p_idx, p_n, p_v)
+    global SimParams;
+
+    option_boundaries = [ 0 SimParams.choice_groups.boundaries];
+    faction_boundaries = SimParams.factions.boundaries;
+    fp = SimParams.factions.preferences;
+
+    b = round(SimParams.voting.numChoices * option_boundaries);
+    f = round(p_n * faction_boundaries);
+
+    % Determine the faction for this voter
+    faction = sum(f < p_idx) + 1;
+
+    % Shuffle the order of preferences within the preference groups
+    prefs = zeros(1,SimParams.voting.numChoices);
+    for i = 2:length(option_boundaries)
+        prefs(b(i-1)+1:b(i)) = randperm(b(i)-b(i-1)) + b(fp(faction,i-1));
+    endfor
+
+    % Now that we know their general preferences, we apply the following
+    % voting strategy:
+    %
+    % The participant will accumulate votes into choices starting with their
+    % favorite choice group. Once they have accumulated a fraction of votes
+    % equalling or exceeding the vote_distribution value, they will start to
+    % vote for their 2nd favorite choice group, and so on.
+
+    % Determine votes that will be cast for each choice group
+    vcd = diff(b).*SimParams.factions.vote_distribution;
+
+    totalVotesCast = 0;
+    votesCastInGroup = zeros(1,length(b)-1);
+    p = zeros(1,p_v);
+    for choiceGroup = 1:length(b)-1
+        while votesCastInGroup(choiceGroup) < vcd(choiceGroup) && totalVotesCast < p_v
+            p(totalVotesCast+1) = prefs(votesCastInGroup(choiceGroup)+1+b(choiceGroup));
+            votesCastInGroup(choiceGroup) = votesCastInGroup(choiceGroup) + 1;
+            totalVotesCast = totalVotesCast + 1;
+        endwhile
+    endfor
+
+    % At this point there may be avaiable votes that have not been used.
+    % Participants will fill the choice groups from favorite to least favorite
+    extraVotes = p_v - totalVotesCast;
+    for choiceGroup = 1:length(b)-1
+        while votesCastInGroup(choiceGroup) < b(choiceGroup+1)-b(choiceGroup) && extraVotes > 0
+            p(totalVotesCast+1) = prefs(votesCastInGroup(choiceGroup)+1+b(choiceGroup));
+            votesCastInGroup(choiceGroup) = votesCastInGroup(choiceGroup) + 1;
+            totalVotesCast = totalVotesCast + 1;
+            extraVotes = extraVotes - 1;
+        endwhile
+    endfor
+
+
+end
+
 
 %
 % Randomize preferences in some number of groups, participants divided into
@@ -276,10 +346,11 @@ function [p] = randomGMF(p_idx, p_n, p_v)
 
     % Due to rounding, sometimes the above few statements can cause a voter to cast more votes than allowed
     % or fewer votes than permitted. The code below corrects this.
-    while sum(votesPerGroup) < p_v
-        % If not enough votes allocated, add to favorite group
-        votesPerGroup(1) = votesPerGroup(1) + 1;
-    endwhile
+    %while sum(votesPerGroup) < p_v
+        % If not enough votes allocated, add to the favorite group that does not already have enough
+        % votes allocated according to the 'vote_distribution' parameter
+    %    votesPerGroup(1) = votesPerGroup(1) + 1;
+    %endwhile
     while sum(votesPerGroup) > p_v
         % If too many votes allocated, take away from least favorite group that has
         % at least one vote
@@ -309,7 +380,7 @@ function [p] = randomGMF(p_idx, p_n, p_v)
             votesPerGroup(fp(faction,i-1)) = votesPerGroup(fp(faction,i-1)) + 1;
             excessVotes = excessVotes - 1;
         endwhile
-    endfor
+   endfor
 
     % Determine preference groupings for that faction
     p = zeros(1,SimParams.voting.numChoices);

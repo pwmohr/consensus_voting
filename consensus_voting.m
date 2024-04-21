@@ -14,7 +14,7 @@ global SimParams = struct(
         "participants", [30],
 
         % votesPP is how many votes each participant can cast
-        "votesPP", [1:30],
+        "votesPP", [1:100],
 
         % method describes how the participants distribute their votes
         % available methods:
@@ -25,7 +25,7 @@ global SimParams = struct(
         % 'random':
         %       Participants randomly allocate votes. Only 1 vote allowed per item - no vote stacking
         %
-        % 'random-groupings-single-faction':
+        % 'random-groupings-single-faction': [DEPRECATED]
         %       The items to be voted upon are grouped (according to 'choice_groups.boundaries', below).
         %       All agree that the first group is best, next is 2nd best, etc. But within each group
         %       participants vote randomly.
@@ -54,11 +54,11 @@ global SimParams = struct(
         % Min votes required to consider one of the choices 'selected'. It should be a number from 0 to 1 and is a fraction of the number
         % of voting participants. This is used in the 'add-votes-until-threshold' exit criteria and is ignored in the 'epsilon-deltaExitCriteria'
         % exit criteria.
-        "votes_required_for_selection", 0.5,
+        "votes_required_for_selection", 1,
 
         % Min choices selected to exit. This is the number of choices that must be selected (according to 'votes-required-for-selection')
         % in order to exit the voting. It is a fraction of the number of choices, so should be a number from 0 to 1.
-        "choices_selected_to_exit", 0.1
+        "choices_selected_to_exit", 1
    ),
     "csr_criteria",
     struct(
@@ -85,7 +85,7 @@ global SimParams = struct(
         % operate similarly to group boundaries, above. As with group boundaries, factions do not need to be
         % the same size as one another, and they can be added and taken away by the manner in which 'boundaries'
         % is edited.
-        "boundaries", [0.25 0.5 0.75 1.0],
+        "boundaries", [1.0],
 
         % preferences determines the order of preference that each faction has for each choice group.
         % the rows represent factions 1-N, and the columns represent the order of preference for that faction,
@@ -98,20 +98,22 @@ global SimParams = struct(
                         3 4 1 2 5 6 7 8 9 10;
                         2 3 4 1 6 5 8 7 9 10],
 
-        % vote_distribution represents what fraction of total available votes a participant wants to cast in each
-        % of their descending list of preferences. For example, [ 0.5 0.35 0.15 ] would mean that a voter
-        % would allocate 50% of their votes to their favorite choice group, 35% of their votes to their 2nd favorite
-        % group, and 15% of their votes to their 3rd favorite group.
+        % vote_distribution represents what fraction of each group of choices the participant wants to vote for
+        % e.g., [ .75 .5 .25 .1 ] would mean the participant would want to place votes on 75% of their favorite
+        % choice group, but then would move on to start voting on their second favorite choice group. Once 40%
+        % of those choices had been voted for, the participant would move on to the 3rd group and so on until they
+        % are out of votes.
         %
-        % The sum of the columns should be 1.0
-        "vote_distribution", [ 0.3 0.25 0.2 0.15 0.1 ]
+        % If after they've hit those percentage targets, they have votes remaining, they will fill up the max number
+        % of votes in their first preference choice group, then fill up the max number in their 2nd preferred choice group, etc.
+        "vote_distribution", linspace(1,0,10)
     ),
     "precision",
     struct(
         % epsilon and deltaExitCriteria define the conditions under which
-        % the simulation ends. When the 'consensus' average value has
-        % changed less than 'epsilon' for at least 'deltaExitCriteria' passes,
-        % the simulation is complete
+        % the simulation ends for the 'epsilon-deltaExitCriteria' exit_critera.
+        % When the 'consensus' average value has changed less than 'epsilon'
+        % for at least 'deltaExitCriteria' passes, the simulation is complete
         "epsilon", 0.001,
         "deltaExitCriteria", 10
     ),
@@ -122,7 +124,7 @@ global SimParams = struct(
         %
         % The display will be updated according to "display_update_frequency", 1 = every time, n = every nth pass.
         "display_vote_monitor", true,
-        "display_update_frequency", 5
+        "display_update_frequency", 1
     )
 );
 
@@ -196,7 +198,7 @@ if isequal( SimParams.voting.exit_criteria, 'epsilon-deltaExitCriteria' )
     zlabel("Fraction", "FontSize", 14);
 else
     for i = 1:length(SimParams.voting.participants)
-        [c,s,r,n(i)] = simulate_voting(SimParams.voting.participants(i), 0);
+        [c,s,r,n(i)] = simulate_voting(SimParams.voting.participants(i), max(SimParams.voting.votesPP));
         if n(i) > 0
             fprintf("For %d participants, exit condition achieved at %d votes per participant.\n", SimParams.voting.participants(i), n(i));
         else
